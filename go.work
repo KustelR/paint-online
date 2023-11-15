@@ -1,0 +1,8 @@
+go 1.21.3
+
+use ./backend/main
+
+use (
+	./backend/src/app
+	./backend/src/websocket
+)
