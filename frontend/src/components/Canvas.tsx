@@ -5,10 +5,14 @@ import axios from "axios";
 import { DrawData } from "@/scripts/drawSerializer";
 import Button from "./ui/Button";
 import type { Position, Color } from "@/scripts/drawing";
+import { ColorFromHex, RGBAColor } from "@/scripts/drawing";
 
 type Props = {
+  height: number;
+  width: number;
   url?: string;
   id?: string;
+  getId?: (id: string) => void;
 };
 
 function getWSclosure(url: string) {
@@ -28,8 +32,12 @@ function getWSclosure(url: string) {
 function drawLine(
   pos: Position,
   prevPos: Position,
-  context: CanvasRenderingContext2D
+  context: CanvasRenderingContext2D,
+  color: Color
 ) {
+  //console.log(color)
+  //console.log(color.toHexString())
+  context.strokeStyle = color.toHexString();
   context.beginPath();
   context.moveTo(prevPos.x, prevPos.y);
   context.lineTo(pos.x, pos.y);
@@ -45,19 +53,21 @@ function clearCanvas(canvas: HTMLCanvasElement): void {
   ctx?.putImageData(canvasData, 0, 0);
 }
 
-export default function Canvas({ url, id }: Props) {
+export default function Canvas({ url, id, height, width, getId }: Props) {
   const [context, setContext] = useState<CanvasRenderingContext2D>();
   const [isPressed, setIsPressed] = useState<boolean>(false);
   const [prevPos, setPrevPos] = useState<Position | null>(null);
-  const [drawData, setDrawData] = useState<Array<DrawData>>([]);
-  const canvas = useRef<HTMLCanvasElement>(null);
+  const [drawBuffer, setDrawBuffer] = useState<DrawData>(
+    new DrawData("empty", [], new RGBAColor(0, 0, 0, 0))
+  );
   const [ws, setWS] = useState<WebSocket | null>(null);
   const [incomingDrawingData, setIncomingDrawingData] = useState<
     Array<DrawData>
   >([]);
+  const [color, setColor] = useState<string>("000000");
+  const canvas = useRef<HTMLCanvasElement>(null);
 
   function sender(data: string) {
-    console.log(data);
     if (!ws || ws.readyState != 1) return;
     ws.send(data);
   }
@@ -70,15 +80,23 @@ export default function Canvas({ url, id }: Props) {
   }, [context]);
 
   useEffect(() => {
-    console.log(ws);
+    console.log(id)
     if (!url || ws) return;
     const wsClosure = getWSclosure(url);
     const wsocket = wsClosure();
+    wsocket.addEventListener("open", () => {
+      if (!id) {
+        wsocket.send("init");
+      } else {
+        wsocket.send(id);
+      }
+    });
     wsocket.addEventListener("message", (msg) => {
       let incoming;
       try {
         incoming = JSON.parse(msg.data);
       } catch (e) {
+        if (getId) getId(msg.data);
         return;
       }
       setIncomingDrawingData([...incomingDrawingData, incoming]);
@@ -89,87 +107,134 @@ export default function Canvas({ url, id }: Props) {
   useEffect(() => {
     if (!context) return;
     for (let i = 0; i < incomingDrawingData.length; i++) {
-      if (incomingDrawingData[i].actionType === "draw line") {
-        const drawData = incomingDrawingData[i];
-        //console.log(drawData)
-        const actionsLen = drawData.actions.length;
-        for (let j = 0; i < actionsLen; j++) {
-          console.log(drawData.actions[j]);
-          const action = drawData.actions[j];
-          if (!action) return;
-          drawLine(action.end, action.start, context);
+      const drawData = incomingDrawingData[i];
+      switch (drawData.actionType) {
+        case "draw line": {
+          const actionsLen = drawData.actions.length;
+          for (let j = 0; i < actionsLen; j++) {
+            const action = drawData.actions[j];
+            if (!action) return;
+            const colorData = drawData.color;
+            drawLine(
+              action.end,
+              action.start,
+              context,
+              colorData
+                ? Object.assign(new RGBAColor(0, 0, 0, 0), colorData)
+                : new RGBAColor(0, 0, 0, 255)
+            );
+          }
+          break;
+        }
+        case "clear canvas": {
+          if (canvas.current) {
+            clearCanvas(canvas.current);
+            break;
+          }
         }
       }
     }
+    //setIncomingDrawingData([])
   }, [incomingDrawingData]);
 
-  useEffect(() => {
-    if (!ws || ws.readyState != 1) return;
-    console.log(ws, id);
-    if (!id) {
-      console.log("init");
-      ws.send("init");
-    } else {
-      ws.send(id);
-    }
-  }, [ws, ws?.readyState]);
-
   return (
-    <div className="w-fit">
-      <canvas
-        ref={canvas}
-        width={400}
-        height={400}
-        className="bg-neutral-100"
-        onMouseMove={(e) => {
-          if (context && isPressed && e.target instanceof HTMLCanvasElement) {
-            const rect = e.target.getBoundingClientRect();
-            const x = e.clientX - rect.x;
-            const y = e.clientY - rect.y;
-            context.beginPath();
-            if (!prevPos) {
-              setDrawData([...drawData, new DrawData("draw line", [])]);
-            } else {
-              drawLine({ x: x, y: y }, prevPos, context);
-              drawData.at(-1)?.addAction("line", prevPos, { x: x, y: y });
+    <div className=" border border-neutral-200 border-t-4 border-t-cyan-500">
+      <div className="md:flex">
+        <div className="border border-neutral-300 m-1 overflow-scroll">
+        <canvas
+        className=""
+          ref={canvas}
+          width={width}
+          height={height}
+          onMouseMove={(e) => {
+            if (context && isPressed && e.target instanceof HTMLCanvasElement) {
+              const rect = e.target.getBoundingClientRect();
+              const x = e.clientX - rect.x;
+              const y = e.clientY - rect.y;
+              context.beginPath();
+              if (!prevPos) {
+                setDrawBuffer(
+                  new DrawData("draw line", [], ColorFromHex(color))
+                );
+                context;
+              } else {
+                drawLine({ x: x, y: y }, prevPos, context, ColorFromHex(color)); //
+                drawBuffer.addAction("line", prevPos, { x: x, y: y });
+              }
+              setPrevPos({ x: x, y: y });
             }
-            setPrevPos({ x: x, y: y });
-          }
-        }}
-        onMouseLeave={() => {
-          setIsPressed(false);
-          setPrevPos(null);
-        }}
-        onMouseDown={() => {
-          setIsPressed(true);
-        }}
-        onMouseUp={() => {
-          setIsPressed(false);
-          setPrevPos(null);
-          drawData.pop()?.send(sender);
-        }}
-      ></canvas>
-      <div className="w-full flex justify-between">
-        <Button
-          onClick={() => {
-            if (!canvas.current) return;
-            clearCanvas(canvas.current);
           }}
-          className="w-full mr-1"
-        >
-          Clear
-        </Button>
-        <Button
-          onClick={() => {
-            if (!canvas.current || !context || !url) return;
-            //const imageData = context.getImageData(0, 0, canvas.current.width, canvas.current.height)
-            axios.post(url, canvas.current.toDataURL());
+          onMouseLeave={() => {
+            setIsPressed(false);
+            setPrevPos(null);
+            drawBuffer.send(sender);
+            setDrawBuffer(new DrawData("nothing", []));
           }}
-          className="w-2/6"
-        >
-          Save
-        </Button>
+          onMouseDown={() => {
+            setIsPressed(true);
+          }}
+          onMouseUp={() => {
+            setIsPressed(false);
+            setPrevPos(null);
+            drawBuffer.send(sender);
+          }}
+        ></canvas>
+        </div>
+        <div className="px-2 m-1 border-l border-l-neutral-200">
+          <ul>
+            <li>
+              <label className="block" htmlFor="color">
+                Color
+              </label>
+              <input
+                className="bg-neutral-100"
+                placeholder="#000000"
+                onChange={(e) => {
+                  if (
+                    e.target.value.length < 7 ||
+                    !e.target.value.startsWith("#")
+                  )
+                    return;
+                  setColor(e.target.value);
+                }}
+                name="color"
+                type="color"
+              />
+            </li>
+            <li>
+              <label htmlFor="line-width" className="block">
+                Line width
+              </label>
+              <input
+                name="line-width"
+                onChange={(e) => {
+                  const w = Number(e.target.value);
+                  if (Number.isNaN(w) || !context) return;
+                  context.lineWidth = w;
+                }}
+                type="text"
+                className="bg-neutral-100"
+              />
+            </li>
+          </ul>
+        </div>
+
       </div>
-    </div>
+          <div className="flex m-2">
+          <Button
+            onClick={() => {
+              if (!canvas.current) return;
+              clearCanvas(canvas.current);
+              const newCommand = new DrawData("clear canvas", []);
+              newCommand.send(sender);
+              setDrawBuffer(new DrawData("nothing", []));
+            }}
+            className="px-20 mr-1"
+          >
+            Clear
+          </Button>
+        </div>
+ 
+   </div>
   );
 }
