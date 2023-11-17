@@ -1,13 +1,15 @@
-import { Position } from "./drawing";
+import { Position, Color } from "./drawing";
 
 
 export class DrawData {
-    constructor(actionType: string, actions: Array<action>) {
+    constructor(actionType: string, actions: Array<action>, color?: Color) {
         this.actionType = actionType;
         this.actions = actions;
+        this.color = color;
     }
     actionType: string
     actions: Array<action>
+    color?: Color
 
     send(sender: (data: string) => void) {
         const data = JSON.stringify(this);
