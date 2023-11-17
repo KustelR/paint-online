@@ -7,13 +7,15 @@ import (
 )
 
 type Session struct {
-	mu        sync.Mutex
-	listeners map[*websocket.Conn]bool
-	output    chan Message
+	identifier *string
+	sessions   *Sessions
+	mu         sync.Mutex
+	listeners  map[*websocket.Conn]bool
+	output     chan Message
 }
 
-func createSession() Session {
-	return Session{listeners: make(map[*websocket.Conn]bool, 0), output: make(chan Message)}
+func createSession(identifier *string, sessions *Sessions) Session {
+	return Session{listeners: make(map[*websocket.Conn]bool, 0), output: make(chan Message), identifier: identifier, sessions: sessions}
 }
 
 func (s *Session) addClient(conn *websocket.Conn) error {
@@ -45,11 +47,15 @@ func (s *Session) SendMessage(message Message) error {
 	return nil
 }
 
-func (s *Session) delete() error {
+// CLoses all the connections and deletes the session from sessions
+func (s *Session) Delete() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for l := range s.listeners {
 		l.Close()
+	}
+	if s.sessions != nil {
+		s.sessions.RemoveSession(*s.identifier)
 	}
 	return nil
 }
@@ -59,13 +65,12 @@ func (s *Session) listen(conn *websocket.Conn, output chan Message) {
 		mt, msg, err := conn.ReadMessage()
 		if err != nil || mt == websocket.CloseMessage {
 			s.removeClient(conn)
+			if len(s.listeners) == 0 {
+				s.Delete()
+			}
 			break
 		}
 		message := Message{Sender: conn, Session: s, Msg: msg, Mt: mt}
 		output <- message
 	}
-}
-
-func Create() Sessions {
-	return Sessions{sessionMap: make(map[string]*Session)}
 }

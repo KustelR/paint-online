@@ -31,7 +31,7 @@ func (s *Sessions) CreateSession(listeners []*websocket.Conn) (string, error) {
 	if s.sessionMap[identifier] != nil {
 		return "", fmt.Errorf("session %s already exists", identifier)
 	}
-	newSession := createSession()
+	newSession := createSession(&identifier, s)
 	s.sessionMap[identifier] = &newSession
 	for _, listener := range listeners {
 		s.sessionMap[identifier].addClient(listener)
@@ -40,10 +40,10 @@ func (s *Sessions) CreateSession(listeners []*websocket.Conn) (string, error) {
 	return identifier, nil
 }
 
-func (s *Sessions) DeleteSession(identifier string) error {
+// Removes session from sessions
+// DOES NOT DELETES OR CLOSES IT
+func (s *Sessions) RemoveSession(identifier string) error {
 	s.mu.Lock()
-
-	s.sessionMap[identifier].delete()
 	delete(s.sessionMap, identifier)
 
 	defer s.mu.Unlock()
@@ -68,4 +68,8 @@ func (s *Sessions) AddMessageHandler(id string, handler func(message Message)) {
 		message := <-s.sessionMap[id].output
 		handler(message)
 	}
+}
+
+func Create() Sessions {
+	return Sessions{sessionMap: make(map[string]*Session)}
 }
