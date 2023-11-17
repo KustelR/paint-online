@@ -33,9 +33,14 @@ func (s *Session) removeClient(conn *websocket.Conn) error {
 	return nil
 }
 
-func (s *Session) SendMessage(messageType int, message []byte) error {
+func (s *Session) SendMessage(message Message) error {
+	messageType := message.Mt
+	msg := message.Msg
 	for listener := range s.listeners {
-		listener.WriteMessage(messageType, message)
+		if listener == message.Sender {
+			continue
+		}
+		listener.WriteMessage(messageType, msg)
 	}
 	return nil
 }

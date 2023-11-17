@@ -61,5 +61,5 @@ func (server *Server) init(connection *websocket.Conn) {
 func echo(message Message) {
 	//fmt.Println(message)
 	//fmt.Printf("echoing from %v to %v\n", message.Session, message.Session.listeners)
-	message.Session.SendMessage(message.Mt, message.Msg)
+	message.Session.SendMessage(message)
 }

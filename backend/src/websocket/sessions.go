@@ -63,11 +63,6 @@ func (s *Sessions) RemoveListener(id string, listener *websocket.Conn) error {
 	return nil
 }
 
-func (s *Sessions) SendMessage(id string, messageType int, message []byte) error {
-	s.sessionMap[id].SendMessage(messageType, message)
-	return nil
-}
-
 func (s *Sessions) AddMessageHandler(id string, handler func(message Message)) {
 	for {
 		message := <-s.sessionMap[id].output
