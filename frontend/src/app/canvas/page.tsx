@@ -32,7 +32,7 @@ export default function page({}: Props) {
       </div>
         <div className="mt-4 w-full p-2 border-neutral-200 border border-t-4 border-t-cyan-500">
           <h2>Generate link</h2>
-          <textarea ref={linkInput} className="text-xl bg-neutral-100" />
+          <textarea ref={linkInput} className="text-xl bg-neutral-100 h-fit w-full" />
           <p>Send this link so people can join you!</p>
         </div>
     </div>
