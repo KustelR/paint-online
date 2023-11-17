@@ -1,11 +1,12 @@
 export type Position = {
-    x: number;
-    y: number;
-}
+  x: number;
+  y: number;
+};
 
 export interface Color {
   toRGB(): { r: number; g: number; b: number };
   toRGBA(): { r: number; g: number; b: number; a: number };
+  toHexString(): string;
 }
 
 export class RGBAColor implements Color {
@@ -26,6 +27,30 @@ export class RGBAColor implements Color {
   toRGBA(): { r: number; g: number; b: number; a: number } {
     return { r: this.R, g: this.G, b: this.B, a: this.A };
   }
+
+  toHexString(): string {
+    return `#${
+      this.R.toString(16).length > 1
+        ? this.R.toString(16)
+        : "0" + this.R.toString(16)
+      }${
+      this.G.toString(16).length > 1
+        ? this.G.toString(16)
+        : "0" + this.G.toString(16)
+    }${
+      this.B.toString(16).length > 1
+        ? this.B.toString(16)
+        : "0" + this.B.toString(16)
+    }`;
+  }
+}
+
+export function ColorFromHex(hex: string): Color {
+  const red = Number("0x" + hex.slice(1, 3));
+  const green = Number("0x" + hex.slice(3, 5));
+  const blue = Number("0x" + hex.slice(5, 7));
+  const alpha = 255;
+  return new RGBAColor(red, green, blue, alpha);
 }
 
 export function draw(
@@ -91,8 +116,18 @@ export function drawBox(
 ): ImageData {
   imageData = drawHorizontalLine(imageData, index, color, size);
   for (let i = 1; i < size / 2; i++) {
-    imageData = drawHorizontalLine(imageData, index + imageData.width * i, color, size);
-    imageData = drawHorizontalLine(imageData, index + imageData.width * -i, color, size);
+    imageData = drawHorizontalLine(
+      imageData,
+      index + imageData.width * i,
+      color,
+      size
+    );
+    imageData = drawHorizontalLine(
+      imageData,
+      index + imageData.width * -i,
+      color,
+      size
+    );
   }
 
   return imageData;
