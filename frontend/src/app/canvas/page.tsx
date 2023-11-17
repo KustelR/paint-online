@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 type Props = {};
 
-export default function page({}: Props) {
+export default function Page({}: Props) {
     const [newId, setNewId] = useState<null | string>(null)
     const linkInput = useRef<null | HTMLTextAreaElement>(null)
     const params = useSearchParams();
