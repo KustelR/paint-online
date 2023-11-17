@@ -2,8 +2,6 @@
 
 import React, { useState } from "react";
 
-import Image from "next/image";
-import Header from "@/components/Header";
 import Button from "@/components/ui/Button";
 import Canvas from "@/components/Canvas";
 
@@ -18,35 +16,16 @@ export default function Home() {
   const [newId, setNewId] = useState<string>("");
 
   return (
-    <main className="">
-      <Header></Header>
-      <div className="flex justify-between mx-2">
-        <Canvas url="ws://localhost:8079"></Canvas>
-        <ul>
-          {canvases.map((canvas) => {
-            return (
-              <li>
-                <Canvas url={url} id={canvas.id}></Canvas>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="block">
-          <input
-            onChange={(e) => {
-              setNewId(e.target.value);
-            }}
-            className="bg-neutral-200"
-            type="text"
-          />
-          <Button
-            onClick={() => {
-                setCanvases([...canvases, { id: newId }]);
-            }}
-          >
-            ADD
-          </Button>
-        </div>
+    <main className="min-w-fit">
+      <div className="border border-neutral-400 w-fit p-2 m-4">
+        <h2 className="font-bold">Create new canvas</h2>
+        <form action="/canvas" rel="opener">
+          <label className="block" htmlFor="h">Height</label>
+          <input className="bg-neutral-100" name="h" type="text" />
+          <label className="block" htmlFor="w">Width</label>
+          <input className="bg-neutral-100" name="w" type="text" />
+          <Button className="block mt-2">CREATE</Button>
+        </form>
       </div>
     </main>
   );
