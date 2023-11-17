@@ -14,7 +14,7 @@ type Canvas = {
 export default function Home() {
   const [canvases, setCanvases] = useState<Array<Canvas>>([]);
   const [newId, setNewId] = useState<string>("");
-
+  
   return (
     <main className="min-w-fit">
       <div className="border border-neutral-400 w-fit p-2 m-4">
