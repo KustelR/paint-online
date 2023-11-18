@@ -52,8 +52,7 @@ function handleDrawData(
   context: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement
 ) {
-  console.log(data)
-  let oldLineWidth;
+  let oldLineWidth = 1;
   if (data.lineWidth) {
     oldLineWidth = context.lineWidth;
     context.lineWidth = data.lineWidth;
@@ -80,8 +79,8 @@ function handleDrawData(
       case "clear canvas": {
         if (canvas) {
           clearCanvas(canvas);
-          break;
         }
+        break;
       }
     }
   }
@@ -103,22 +102,20 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   const [context, setContext] = useState<CanvasRenderingContext2D>();
   const [isPressed, setIsPressed] = useState<boolean>(false);
   const [prevPos, setPrevPos] = useState<Position | null>(null);
-  const [drawBuffer, setDrawBuffer] = useState<DrawData>(
-    new DrawData([])
-  );
+  const [drawBuffer, setDrawBuffer] = useState<DrawData>(new DrawData([]));
   const [history, setHistory] = useState<History>(new History());
   const [ws, setWS] = useState<WebSocket | null>(null);
   const [incomingDrawingData, setIncomingDrawingData] = useState<
     Array<DrawData>
   >([]);
   const [color, setColor] = useState<string>("000000");
-  const [lineWidth, setLineWidth] = useState<number>(0);
+  const [lineWidth, setLineWidth] = useState<number>(1);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   function sender(data: DrawData) {
     if (!ws || ws.readyState != 1) return;
     history.addAction(data);
-    ws.send(JSON.stringify(data));
+    ws.send(JSON.stringify({ MsgType: "drawing", Content: data }));
   }
   useEffect(() => {
     if (!canvas.current || !(canvas.current instanceof HTMLCanvasElement))
@@ -129,7 +126,6 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   }, [context]);
 
   useEffect(() => {
-    console.log(id);
     if (!url || ws) return;
     const wsClosure = getWSclosure(url);
     const wsocket = wsClosure();
@@ -181,7 +177,9 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                 const y = e.clientY - rect.y;
                 context.beginPath();
                 if (!prevPos) {
-                  setDrawBuffer(new DrawData([], lineWidth, ColorFromHex(color)));
+                  setDrawBuffer(
+                    new DrawData([], lineWidth, ColorFromHex(color))
+                  );
                   context;
                 } else {
                   drawLine(
@@ -271,7 +269,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                   clearCanvas(canvas.current);
                   history.redo();
                   history.remind().forEach((data) => {
-                  handleDrawData(data, context, canvas.current!);
+                    handleDrawData(data, context, canvas.current!);
                   });
                 }}
               >
