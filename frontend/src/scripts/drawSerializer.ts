@@ -10,25 +10,31 @@ export class DrawData {
     actions: Array<action>
     color?: Color
 
-    send(sender: (data: string) => void) {
-        const data = JSON.stringify(this);
-        sender(data);
+    send(sender: (data: DrawData) => void) {
+        sender(this);
     }
 
     addAction(type: string, start: Position, end: Position) {
         this.actions.push({start: start, end: end, type: type})
     }
+
+    isEmpty(): boolean {
+        if (this.actions.length === 0) {
+            return true;
+        }
+        return false;
+    }
 }
 
 export class History {
-    constructor(limit: number | undefined) {
+    constructor(limit?: number) {
         this.actions = [];
         if (limit) this.limit = limit;
     }
 
-    limit: number = 20
+    limit: number = 1000
     actions: Array<DrawData>;
-    offset: number = 0;
+    redoArr: Array<DrawData> = [];
 
     addAction(action: DrawData) {
         this.actions.push(action);
@@ -38,22 +44,22 @@ export class History {
     }
 
     remind() {
-        return this.actions.slice(0, this.actions.length - (1 + this.offset));
+        return this.actions;
     }
 
     undo() {
-        if (this.offset  < this.actions.length) {
-            this.offset++;
-        } else {
-            throw new Error("NOthing to undo")
+        if (this.actions.length > 0) {
+            const el = this.actions.pop()
+            if (!el) return
+            this.redoArr.push(el)
         }
     }
 
     redo() {
-        if (this.offset > 0) {
-            this.offset--;
-        } else {
-            throw new Error("Nothing to redo")
+        if (this.redoArr.length > 0) {
+            const redoEl = this.redoArr.pop()
+            if (!redoEl) return
+            this.actions.push(redoEl)
         }
     }
 

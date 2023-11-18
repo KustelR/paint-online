@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect } from "react";
-import axios from "axios";
-import { DrawData } from "@/scripts/drawSerializer";
+import { DrawData, History } from "@/scripts/drawSerializer";
 import Button from "./ui/Button";
 import type { Position, Color } from "@/scripts/drawing";
 import { ColorFromHex, RGBAColor } from "@/scripts/drawing";
@@ -35,13 +34,44 @@ function drawLine(
   context: CanvasRenderingContext2D,
   color: Color
 ) {
-  //console.log(color)
-  //console.log(color.toHexString())
   context.strokeStyle = color.toHexString();
   context.beginPath();
   context.moveTo(prevPos.x, prevPos.y);
   context.lineTo(pos.x, pos.y);
   context.stroke();
+}
+
+function handleDrawData(
+  data: DrawData,
+  context: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement
+) {
+  const actionsLen = data.actions.length;
+  for (let j = 0; j < actionsLen; j++) {
+    const action = data.actions[j];
+    switch (action.type) {
+      case "line":
+        {
+          if (!action || !action.start || !action.end) return;
+          const colorData = data.color;
+          drawLine(
+            action.end,
+            action.start,
+            context,
+            colorData
+              ? Object.assign(new RGBAColor(0, 0, 0, 0), colorData)
+              : new RGBAColor(0, 0, 0, 255)
+          );
+        }
+        break;
+      case "clear canvas": {
+        if (canvas) {
+          clearCanvas(canvas);
+          break;
+        }
+      }
+    }
+  }
 }
 
 function clearCanvas(canvas: HTMLCanvasElement): void {
@@ -60,6 +90,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   const [drawBuffer, setDrawBuffer] = useState<DrawData>(
     new DrawData([], new RGBAColor(0, 0, 0, 0))
   );
+  const [history, setHistory] = useState<History>(new History());
   const [ws, setWS] = useState<WebSocket | null>(null);
   const [incomingDrawingData, setIncomingDrawingData] = useState<
     Array<DrawData>
@@ -67,9 +98,10 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   const [color, setColor] = useState<string>("000000");
   const canvas = useRef<HTMLCanvasElement>(null);
 
-  function sender(data: string) {
+  function sender(data: DrawData) {
     if (!ws || ws.readyState != 1) return;
-    ws.send(data);
+    history.addAction(data);
+    ws.send(JSON.stringify(data));
   }
   useEffect(() => {
     if (!canvas.current || !(canvas.current instanceof HTMLCanvasElement))
@@ -80,7 +112,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   }, [context]);
 
   useEffect(() => {
-    console.log(id)
+    console.log(id);
     if (!url || ws) return;
     const wsClosure = getWSclosure(url);
     const wsocket = wsClosure();
@@ -105,80 +137,65 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   }, [url]);
 
   useEffect(() => {
-    if (!context) return;
+    if (!context || !canvas.current) return;
     for (let i = 0; i < incomingDrawingData.length; i++) {
       const drawData = incomingDrawingData[i];
-      const actionsLen = drawData.actions.length;
-      for (let j = 0; j < actionsLen; j++) {
-        const action = drawData.actions[j];
-        switch (action.type) {
-        case "line": {
-            if (!action || !action.start || !action.end) return;
-            const colorData = drawData.color;
-            drawLine(
-              action.end,
-              action.start,
-              context,
-              colorData
-                ? Object.assign(new RGBAColor(0, 0, 0, 0), colorData)
-                : new RGBAColor(0, 0, 0, 255)
-            );
-          }
-          break;
-        case "clear canvas": {
-          if (canvas.current) {
-            clearCanvas(canvas.current);
-            break;
-          }
-        }
-      }
+      handleDrawData(drawData, context, canvas.current);
     }
-    }
-    //setIncomingDrawingData([])
   }, [incomingDrawingData]);
 
   return (
     <div className=" border border-neutral-200 border-t-4 border-t-cyan-500">
       <div className="md:flex">
         <div className="border border-neutral-300 m-1 overflow-scroll">
-        <canvas
-        className=""
-          ref={canvas}
-          width={width}
-          height={height}
-          onMouseMove={(e) => {
-            if (context && isPressed && e.target instanceof HTMLCanvasElement) {
-              const rect = e.target.getBoundingClientRect();
-              const x = e.clientX - rect.x;
-              const y = e.clientY - rect.y;
-              context.beginPath();
-              if (!prevPos) {
-                setDrawBuffer(
-                  new DrawData([], ColorFromHex(color))
-                );
-                context;
-              } else {
-                drawLine({ x: x, y: y }, prevPos, context, ColorFromHex(color)); //
-                drawBuffer.addAction("line", prevPos, { x: x, y: y });
+          <canvas
+            className=""
+            ref={canvas}
+            width={width}
+            height={height}
+            onMouseMove={(e) => {
+              if (
+                context &&
+                isPressed &&
+                e.target instanceof HTMLCanvasElement
+              ) {
+                const rect = e.target.getBoundingClientRect();
+                const x = e.clientX - rect.x;
+                const y = e.clientY - rect.y;
+                context.beginPath();
+                if (!prevPos) {
+                  setDrawBuffer(new DrawData([], ColorFromHex(color)));
+                  context;
+                } else {
+                  drawLine(
+                    { x: x, y: y },
+                    prevPos,
+                    context,
+                    ColorFromHex(color)
+                  ); //
+                  drawBuffer.addAction("line", prevPos, { x: x, y: y });
+                }
+                setPrevPos({ x: x, y: y });
               }
-              setPrevPos({ x: x, y: y });
-            }
-          }}
-          onMouseLeave={() => {
-            setIsPressed(false);
-            setPrevPos(null);
-            drawBuffer.send(sender);
-            setDrawBuffer(new DrawData([]));
-          }}
-          onMouseDown={() => {
-            setIsPressed(true);
-          }}
-          onMouseUp={() => {
-            setIsPressed(false);
-            setPrevPos(null);
-            drawBuffer.send(sender);
-          }}
-        ></canvas>
+            }}
+            onMouseLeave={() => {
+              setIsPressed(false);
+              setPrevPos(null);
+              if (!drawBuffer.isEmpty()) {
+                drawBuffer.send(sender);
+              }
+              setDrawBuffer(new DrawData([]));
+            }}
+            onMouseDown={() => {
+              setIsPressed(true);
+            }}
+            onMouseUp={() => {
+              setIsPressed(false);
+              setPrevPos(null);
+              drawBuffer.send(sender);
+              setDrawBuffer(new DrawData([]));
+            }}
+          ></canvas>
         </div>
         <div className="px-2 m-1 border-l border-l-neutral-200">
           <ul>
@@ -216,25 +233,49 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                 className="bg-neutral-100"
               />
             </li>
+            <li className="flex justify-between">
+              <button
+                onClick={() => {
+                  if (!canvas.current || !context) return;
+                  clearCanvas(canvas.current);
+                  history.undo();
+                  history.remind().forEach((data) => {
+                    handleDrawData(data, context, canvas.current!);
+                  });
+                }}
+              >
+                {"Undo <-"}
+              </button>
+              <button
+                onClick={() => {
+                  if (!canvas.current || !context) return;
+                  clearCanvas(canvas.current);
+                  history.redo();
+                  history.remind().forEach((data) => {
+                    handleDrawData(data, context, canvas.current!);
+                  });
+                }}
+              >
+                {"Redo ->"}
+              </button>
+            </li>
           </ul>
         </div>
-
       </div>
-          <div className="flex m-2">
-          <Button
-            onClick={() => {
-              if (!canvas.current) return;
-              clearCanvas(canvas.current);
-              const newCommand = new DrawData([{type: "clear canvas"}]);
-              newCommand.send(sender);
-              setDrawBuffer(new DrawData([]));
-            }}
-            className="px-20 mr-1"
-          >
-            Clear
-          </Button>
-        </div>
- 
-   </div>
+      <div className="flex m-2">
+        <Button
+          onClick={() => {
+            if (!canvas.current) return;
+            clearCanvas(canvas.current);
+            const newCommand = new DrawData([{ type: "clear canvas" }]);
+            newCommand.send(sender);
+            setDrawBuffer(new DrawData([]));
+          }}
+          className="px-20 mr-1"
+        >
+          Clear
+        </Button>
+      </div>
+    </div>
   );
 }
