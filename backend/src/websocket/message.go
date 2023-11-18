@@ -8,3 +8,13 @@ type Message struct {
 	Msg     []byte
 	Mt      int
 }
+
+type ExternalMsg struct {
+	MsgType string
+	Content any
+}
+
+type DrawMessage struct {
+	MsgType string
+	Content map[string]interface{}
+}

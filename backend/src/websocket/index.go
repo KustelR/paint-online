@@ -1,6 +1,7 @@
 package mywsocket
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -51,6 +52,8 @@ func (server *Server) init(connection *websocket.Conn) {
 			break
 		} else if server.sessions.FindSession(message) != nil {
 			server.sessions.AddListener(message, connection)
+			fmt.Println(server.sessions.FindSession(message).History)
+			connection.WriteJSON(ExternalMsg{MsgType: "history", Content: server.sessions.FindSession(message).History})
 			fmt.Printf("connected to %v session\n", message)
 			break
 		}
@@ -59,5 +62,24 @@ func (server *Server) init(connection *websocket.Conn) {
 }
 
 func echo(message Message) {
+	var msg ExternalMsg
+	err := json.Unmarshal(message.Msg, &msg)
+	if err != nil {
+		fmt.Println("[WS][ERROR] Error parsing message")
+		return
+	}
+	if msg.MsgType == "drawing" {
+		var drawMsg DrawMessage
+		err := json.Unmarshal(message.Msg, &drawMsg)
+		if err != nil {
+			fmt.Println("[WS][ERROR] Error parsing draw message")
+			return
+		}
+		message.Session.History = append(message.Session.History, drawMsg.Content)
+	}
+	if msg.MsgType == "getHistory" {
+		message.Sender.WriteJSON(ExternalMsg{MsgType: "history", Content: message.Session.History})
+		return
+	}
 	message.Session.SendMessage(message)
 }

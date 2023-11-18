@@ -29,12 +29,12 @@ export class DrawData {
 }
 
 export class History {
-    constructor(limit?: number) {
-        this.actions = [];
-        if (limit) this.limit = limit;
+    constructor(actions?: Array<DrawData>, limit?: number) {
+        actions ? this.actions = actions :  this.actions = [];
+        limit ? this.limit = limit : this.limit = 1000;
     }
 
-    limit: number = 1000
+    limit: number
     actions: Array<DrawData>;
     redoArr: Array<DrawData> = [];
 

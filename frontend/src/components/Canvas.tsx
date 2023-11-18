@@ -6,6 +6,11 @@ import Button from "./ui/Button";
 import type { Position, Color } from "@/scripts/drawing";
 import { ColorFromHex, RGBAColor } from "@/scripts/drawing";
 
+type IncomingMsg = {
+  MsgType: string;
+  Content: Array<DrawData> | DrawData;
+};
+
 type Props = {
   height: number;
   width: number;
@@ -126,6 +131,13 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   }, [context]);
 
   useEffect(() => {
+    history.remind().forEach((data) => {
+      if (!canvas.current || !context) return;
+      handleDrawData(data, context, canvas.current);
+    });
+  }, [history]);
+
+  useEffect(() => {
     if (!url || ws) return;
     const wsClosure = getWSclosure(url);
     const wsocket = wsClosure();
@@ -137,14 +149,23 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
       }
     });
     wsocket.addEventListener("message", (msg) => {
-      let incoming;
+      let incoming: IncomingMsg;
       try {
         incoming = JSON.parse(msg.data);
       } catch (e) {
         if (getId) getId(msg.data);
         return;
       }
-      setIncomingDrawingData([...incomingDrawingData, incoming]);
+      if (incoming.MsgType === "drawing") {
+        if (incoming.Content instanceof Array) return;
+        setIncomingDrawingData([...incomingDrawingData, incoming.Content]);
+      } else if (
+        incoming.MsgType === "history" &&
+        !(incoming.Content instanceof DrawData)
+      ) {
+        const newHistory = new History(incoming.Content);
+        setHistory(newHistory);
+      }
     });
     setWS(wsocket);
   }, [url]);

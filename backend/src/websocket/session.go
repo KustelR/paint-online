@@ -7,6 +7,7 @@ import (
 )
 
 type Session struct {
+	History    []map[string]interface{}
 	identifier *string
 	sessions   *Sessions
 	mu         sync.Mutex
