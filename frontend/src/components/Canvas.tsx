@@ -58,7 +58,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   const [isPressed, setIsPressed] = useState<boolean>(false);
   const [prevPos, setPrevPos] = useState<Position | null>(null);
   const [drawBuffer, setDrawBuffer] = useState<DrawData>(
-    new DrawData("empty", [], new RGBAColor(0, 0, 0, 0))
+    new DrawData([], new RGBAColor(0, 0, 0, 0))
   );
   const [ws, setWS] = useState<WebSocket | null>(null);
   const [incomingDrawingData, setIncomingDrawingData] = useState<
@@ -108,12 +108,12 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
     if (!context) return;
     for (let i = 0; i < incomingDrawingData.length; i++) {
       const drawData = incomingDrawingData[i];
-      switch (drawData.actionType) {
-        case "draw line": {
-          const actionsLen = drawData.actions.length;
-          for (let j = 0; i < actionsLen; j++) {
-            const action = drawData.actions[j];
-            if (!action) return;
+      const actionsLen = drawData.actions.length;
+      for (let j = 0; j < actionsLen; j++) {
+        const action = drawData.actions[j];
+        switch (action.type) {
+        case "line": {
+            if (!action || !action.start || !action.end) return;
             const colorData = drawData.color;
             drawLine(
               action.end,
@@ -125,7 +125,6 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
             );
           }
           break;
-        }
         case "clear canvas": {
           if (canvas.current) {
             clearCanvas(canvas.current);
@@ -133,6 +132,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
           }
         }
       }
+    }
     }
     //setIncomingDrawingData([])
   }, [incomingDrawingData]);
@@ -154,7 +154,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
               context.beginPath();
               if (!prevPos) {
                 setDrawBuffer(
-                  new DrawData("draw line", [], ColorFromHex(color))
+                  new DrawData([], ColorFromHex(color))
                 );
                 context;
               } else {
@@ -168,7 +168,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
             setIsPressed(false);
             setPrevPos(null);
             drawBuffer.send(sender);
-            setDrawBuffer(new DrawData("nothing", []));
+            setDrawBuffer(new DrawData([]));
           }}
           onMouseDown={() => {
             setIsPressed(true);
@@ -225,9 +225,9 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
             onClick={() => {
               if (!canvas.current) return;
               clearCanvas(canvas.current);
-              const newCommand = new DrawData("clear canvas", []);
+              const newCommand = new DrawData([{type: "clear canvas"}]);
               newCommand.send(sender);
-              setDrawBuffer(new DrawData("nothing", []));
+              setDrawBuffer(new DrawData([]));
             }}
             className="px-20 mr-1"
           >

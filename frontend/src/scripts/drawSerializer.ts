@@ -2,12 +2,11 @@ import { Position, Color } from "./drawing";
 
 
 export class DrawData {
-    constructor(actionType: string, actions: Array<action>, color?: Color) {
-        this.actionType = actionType;
+    constructor(actions: Array<action>, color?: Color) {
         this.actions = actions;
         this.color = color;
     }
-    actionType: string
+
     actions: Array<action>
     color?: Color
 
@@ -22,8 +21,8 @@ export class DrawData {
 }
 
 type action = {
-    start: Position
-    end: Position
+    start?: Position
+    end?: Position
     type: string
 }
 
