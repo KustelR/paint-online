@@ -2,13 +2,15 @@ import { Position, Color } from "./drawing";
 
 
 export class DrawData {
-    constructor(actions: Array<action>, color?: Color) {
+    constructor(actions: Array<action>, lineWidth?: number, color?: Color) {
         this.actions = actions;
         this.color = color;
+        if (lineWidth) this.lineWidth = lineWidth
     }
 
     actions: Array<action>
     color?: Color
+    lineWidth: number | undefined = undefined;
 
     send(sender: (data: DrawData) => void) {
         sender(this);

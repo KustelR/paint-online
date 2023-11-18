@@ -32,9 +32,15 @@ function drawLine(
   pos: Position,
   prevPos: Position,
   context: CanvasRenderingContext2D,
-  color: Color
+  width?: number,
+  color?: Color
 ) {
-  context.strokeStyle = color.toHexString();
+  if (color) {
+    context.strokeStyle = color.toHexString();
+  }
+  if (width) {
+    context.lineWidth = width;
+  }
   context.beginPath();
   context.moveTo(prevPos.x, prevPos.y);
   context.lineTo(pos.x, pos.y);
@@ -46,6 +52,12 @@ function handleDrawData(
   context: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement
 ) {
+  console.log(data)
+  let oldLineWidth;
+  if (data.lineWidth) {
+    oldLineWidth = context.lineWidth;
+    context.lineWidth = data.lineWidth;
+  }
   const actionsLen = data.actions.length;
   for (let j = 0; j < actionsLen; j++) {
     const action = data.actions[j];
@@ -58,6 +70,7 @@ function handleDrawData(
             action.end,
             action.start,
             context,
+            undefined,
             colorData
               ? Object.assign(new RGBAColor(0, 0, 0, 0), colorData)
               : new RGBAColor(0, 0, 0, 255)
@@ -71,6 +84,9 @@ function handleDrawData(
         }
       }
     }
+  }
+  if (oldLineWidth) {
+    context.lineWidth = oldLineWidth;
   }
 }
 
@@ -88,7 +104,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   const [isPressed, setIsPressed] = useState<boolean>(false);
   const [prevPos, setPrevPos] = useState<Position | null>(null);
   const [drawBuffer, setDrawBuffer] = useState<DrawData>(
-    new DrawData([], new RGBAColor(0, 0, 0, 0))
+    new DrawData([])
   );
   const [history, setHistory] = useState<History>(new History());
   const [ws, setWS] = useState<WebSocket | null>(null);
@@ -96,6 +112,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
     Array<DrawData>
   >([]);
   const [color, setColor] = useState<string>("000000");
+  const [lineWidth, setLineWidth] = useState<number>(0);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   function sender(data: DrawData) {
@@ -164,13 +181,14 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                 const y = e.clientY - rect.y;
                 context.beginPath();
                 if (!prevPos) {
-                  setDrawBuffer(new DrawData([], ColorFromHex(color)));
+                  setDrawBuffer(new DrawData([], lineWidth, ColorFromHex(color)));
                   context;
                 } else {
                   drawLine(
                     { x: x, y: y },
                     prevPos,
                     context,
+                    lineWidth,
                     ColorFromHex(color)
                   ); //
                   drawBuffer.addAction("line", prevPos, { x: x, y: y });
@@ -182,6 +200,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
               setIsPressed(false);
               setPrevPos(null);
               if (!drawBuffer.isEmpty()) {
+                console.log(drawBuffer);
                 drawBuffer.send(sender);
               }
               setDrawBuffer(new DrawData([]));
@@ -227,7 +246,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                 onChange={(e) => {
                   const w = Number(e.target.value);
                   if (Number.isNaN(w) || !context) return;
-                  context.lineWidth = w;
+                  setLineWidth(w);
                 }}
                 type="text"
                 className="bg-neutral-100"
@@ -252,7 +271,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                   clearCanvas(canvas.current);
                   history.redo();
                   history.remind().forEach((data) => {
-                    handleDrawData(data, context, canvas.current!);
+                  handleDrawData(data, context, canvas.current!);
                   });
                 }}
               >
