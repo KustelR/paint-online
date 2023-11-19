@@ -8,7 +8,12 @@ import { ColorFromHex, RGBAColor } from "@/scripts/drawing";
 
 type IncomingMsg = {
   MsgType: string;
-  Content: Array<DrawData> | DrawData;
+  Content: IncomingHistory | DrawData;
+};
+
+type IncomingHistory = {
+  Actions: Array<DrawData>;
+  RedoArr: Array<DrawData>;
 };
 
 type Props = {
@@ -103,7 +108,11 @@ function clearCanvas(canvas: HTMLCanvasElement): void {
   ctx?.putImageData(canvasData, 0, 0);
 }
 
-function redo(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, history: History) {
+function redo(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  history: History
+) {
   clearCanvas(canvas);
   history.redo();
   history.remind().forEach((data) => {
@@ -111,7 +120,11 @@ function redo(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, hist
   });
 }
 
-function undo(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, history: History) {
+function undo(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  history: History
+) {
   clearCanvas(canvas);
   history.undo();
   history.remind().forEach((data) => {
@@ -131,7 +144,9 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   >([]);
   const [color, setColor] = useState<string>("000000");
   const [lineWidth, setLineWidth] = useState<number>(1);
-  const [incomingHistoryChange, setIncomingHistoryChange] = useState<IncomingMsg | undefined>()
+  const [incomingHistoryChange, setIncomingHistoryChange] = useState<
+    IncomingMsg | undefined
+  >();
   const canvas = useRef<HTMLCanvasElement>(null);
 
   function sender(data: DrawData) {
@@ -148,11 +163,13 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   }, [context]);
 
   useEffect(() => {
-    console.log(incomingHistoryChange)
+    //console.log(incomingHistoryChange);
     if (!incomingHistoryChange || !canvas.current || !context) return;
+    //console.log(history);
     if (incomingHistoryChange.MsgType === "history_redo") {
       redo(canvas.current, context, history);
     } else if (incomingHistoryChange.MsgType === "history_undo") {
+      //console.log('once')
       undo(canvas.current, context, history);
     }
     setIncomingHistoryChange(undefined);
@@ -164,7 +181,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
     history.remind().forEach((data) => {
       handleDrawData(data, context, canvas.current!);
     });
-    console.log(history)
+    console.log(history);
   }, [history]);
 
   useEffect(() => {
@@ -188,18 +205,19 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
       }
       switch (incoming.MsgType) {
         case "drawing": {
-          if (incoming.Content instanceof Array) return;
-          setIncomingDrawingData([...incomingDrawingData, incoming.Content]);
+          console.log(incoming, typeof incoming.Content)
+          const newDrawData = Object.assign(new DrawData([]), incoming.Content)
+          setIncomingDrawingData([...incomingDrawingData, newDrawData]);
           break;
         }
         case "history": {
-          if (!(incoming.Content instanceof Array)) return;
-          const newHistory = new History(incoming.Content);
+          if (incoming.Content instanceof DrawData) return;
+          const newHistory = new History(incoming.Content.Actions, incoming.Content.RedoArr);
           setHistory(newHistory);
           break;
         }
         case "history_redo": {
-         setIncomingHistoryChange(incoming);
+          setIncomingHistoryChange(incoming);
           break;
         }
         case "history_undo": {
@@ -230,31 +248,29 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
             height={height}
             onMouseMove={(e) => {
               if (
-                context &&
-                isPressed &&
-                e.target instanceof HTMLCanvasElement
-              ) {
-                const rect = e.target.getBoundingClientRect();
-                const x = e.clientX - rect.x;
-                const y = e.clientY - rect.y;
-                context.beginPath();
-                if (!prevPos) {
-                  setDrawBuffer(
-                    new DrawData([], lineWidth, ColorFromHex(color))
-                  );
-                  context;
-                } else {
-                  drawLine(
-                    { x: x, y: y },
-                    prevPos,
-                    context,
-                    lineWidth,
-                    ColorFromHex(color)
-                  ); //
-                  drawBuffer.addAction("line", prevPos, { x: x, y: y });
-                }
-                setPrevPos({ x: x, y: y });
+                !context ||
+                !isPressed ||
+                !(e.target instanceof HTMLCanvasElement)
+              )
+                return;
+              const rect = e.target.getBoundingClientRect();
+              const x = e.clientX - rect.x;
+              const y = e.clientY - rect.y;
+              context.beginPath();
+              if (!prevPos) {
+                setDrawBuffer(new DrawData([], lineWidth, ColorFromHex(color)));
+                context;
+              } else {
+                drawLine(
+                  { x: x, y: y },
+                  prevPos,
+                  context,
+                  lineWidth,
+                  ColorFromHex(color)
+                );
+                drawBuffer.addAction("line", prevPos, { x: x, y: y });
               }
+              setPrevPos({ x: x, y: y });
             }}
             onMouseLeave={() => {
               setIsPressed(false);
@@ -317,18 +333,20 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                 onClick={() => {
                   if (!canvas.current || !context) return;
                   undo(canvas.current, context, history);
-                  const msg = {MsgType: "history_undo", Content: null}
-                  ws?.send(JSON.stringify(msg)) 
+                  const msg = { MsgType: "history_undo", Content: null };
+                  ws?.send(JSON.stringify(msg));
+                  console.log("once");
                 }}
               >
                 {"Undo <-"}
               </button>
               <button
                 onClick={() => {
+                  console.log("once");
                   if (!canvas.current || !context) return;
                   redo(canvas.current, context, history);
-                  const msg = {MsgType: "history_redo", Content: null}
-                  ws?.send(JSON.stringify(msg)) 
+                  const msg = { MsgType: "history_redo", Content: null };
+                  ws?.send(JSON.stringify(msg));
                 }}
               >
                 {"Redo ->"}

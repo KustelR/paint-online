@@ -7,7 +7,7 @@ import (
 )
 
 type Session struct {
-	History    []map[string]interface{}
+	History    *History
 	identifier *string
 	sessions   *Sessions
 	mu         sync.Mutex
@@ -15,8 +15,30 @@ type Session struct {
 	output     chan Message
 }
 
+type History struct {
+	Actions []map[string]interface{}
+	RedoArr []map[string]interface{}
+}
+
+func (h *History) Undo() {
+	if len(h.Actions) <= 0 {
+		return
+	}
+	newActions, undone := h.Actions[:len(h.Actions)-1], h.Actions[len(h.Actions)-1]
+	h.Actions = newActions
+	h.RedoArr = append(h.RedoArr, undone)
+}
+func (h *History) Redo() {
+	if len(h.RedoArr) <= 0 {
+		return
+	}
+	newRedoArr, redone := h.RedoArr[:len(h.RedoArr)-1], h.RedoArr[len(h.RedoArr)-1]
+	h.RedoArr = newRedoArr
+	h.Actions = append(h.Actions, redone)
+}
+
 func createSession(identifier *string, sessions *Sessions) Session {
-	return Session{listeners: make(map[*websocket.Conn]bool, 0), output: make(chan Message), identifier: identifier, sessions: sessions}
+	return Session{History: &History{make([]map[string]interface{}, 0), make([]map[string]interface{}, 0)}, listeners: make(map[*websocket.Conn]bool, 0), output: make(chan Message), identifier: identifier, sessions: sessions}
 }
 
 func (s *Session) addClient(conn *websocket.Conn) error {

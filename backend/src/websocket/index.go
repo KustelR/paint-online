@@ -52,7 +52,6 @@ func (server *Server) init(connection *websocket.Conn) {
 			break
 		} else if server.sessions.FindSession(message) != nil {
 			server.sessions.AddListener(message, connection)
-			fmt.Println(server.sessions.FindSession(message).History)
 			connection.WriteJSON(ExternalMsg{MsgType: "history", Content: server.sessions.FindSession(message).History})
 			fmt.Printf("connected to %v session\n", message)
 			break
@@ -66,20 +65,33 @@ func echo(message Message) {
 	err := json.Unmarshal(message.Msg, &msg)
 	if err != nil {
 		fmt.Println("[WS][ERROR] Error parsing message")
+		fmt.Println(err)
 		return
 	}
-	if msg.MsgType == "drawing" {
-		var drawMsg DrawMessage
-		err := json.Unmarshal(message.Msg, &drawMsg)
-		if err != nil {
-			fmt.Println("[WS][ERROR] Error parsing draw message")
+	switch msg.MsgType {
+	case "drawing":
+		{
+			var drawMsg DrawMessage
+			err := json.Unmarshal(message.Msg, &drawMsg)
+			if err != nil {
+				fmt.Println("[WS][ERROR] Error parsing draw message")
+				return
+			}
+			message.Session.History.Actions = append(message.Session.History.Actions, drawMsg.Content)
+		}
+	case "getHistory":
+		{
+			message.Sender.WriteJSON(ExternalMsg{MsgType: "history", Content: message.Session.History})
 			return
 		}
-		message.Session.History = append(message.Session.History, drawMsg.Content)
-	}
-	if msg.MsgType == "getHistory" {
-		message.Sender.WriteJSON(ExternalMsg{MsgType: "history", Content: message.Session.History})
-		return
+	case "history_undo":
+		{
+			message.Session.History.Undo()
+		}
+	case "history_redo":
+		{
+			message.Session.History.Redo()
+		}
 	}
 	message.Session.SendMessage(message)
 }

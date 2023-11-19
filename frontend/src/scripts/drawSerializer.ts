@@ -29,14 +29,15 @@ export class DrawData {
 }
 
 export class History {
-    constructor(actions?: Array<DrawData>, limit?: number) {
+    constructor(actions?: Array<DrawData>, redoArr?: Array<DrawData>, limit?: number) {
         actions ? this.actions = actions :  this.actions = [];
+        redoArr ? this.redoArr = redoArr : this.redoArr = [];
         limit ? this.limit = limit : this.limit = 1000;
     }
 
     limit: number
     actions: Array<DrawData>;
-    redoArr: Array<DrawData> = [];
+    redoArr: Array<DrawData>;
 
     addAction(action: DrawData) {
         this.actions.push(action);
