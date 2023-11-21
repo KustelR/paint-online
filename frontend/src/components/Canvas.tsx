@@ -5,6 +5,7 @@ import { DrawData, History } from "@/scripts/drawSerializer";
 import Button from "./ui/Button";
 import type { Position, Color } from "@/scripts/drawing";
 import { ColorFromHex, RGBAColor } from "@/scripts/drawing";
+import CanvasControl from "./CanvasControl";
 
 type IncomingMsg = {
   MsgType: string;
@@ -36,6 +37,16 @@ function getWSclosure(url: string) {
     }
     return ws;
   };
+}
+
+function getCanvasCoordinates(e: any): Position | null {
+  if (!(e.target instanceof HTMLCanvasElement)) {
+    return null;
+  }
+  const rect = e.target.getBoundingClientRect();
+  const x = e.clientX - rect.x;
+  const y = e.clientY - rect.y;
+  return { x: x, y: y };
 }
 
 function drawLine(
@@ -144,9 +155,11 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   >([]);
   const [color, setColor] = useState<string>("000000");
   const [lineWidth, setLineWidth] = useState<number>(1);
+  const [drawingStart, setDrawingStart] = useState<Position | undefined>();
   const [incomingHistoryChange, setIncomingHistoryChange] = useState<
     IncomingMsg | undefined
   >();
+  const [drawMode, setDrawMode] = useState<number>(0);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   function sender(data: DrawData) {
@@ -154,6 +167,34 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
     history.addAction(data);
     ws.send(JSON.stringify({ MsgType: "drawing", Content: data }));
   }
+
+  function drawModeSetter(mode: number) {
+    setDrawMode(mode);
+  }
+
+  function colorSetter(color: string) {
+    setColor(color);
+  }
+
+  function lineWidthSetter(width: number) {
+    if (Number.isNaN(width) || !context) return;
+    setLineWidth(width);
+  }
+
+  function undoOnClick() {
+    if (!canvas.current || !context) return;
+    undo(canvas.current, context, history);
+    const msg = { MsgType: "history_undo", Content: null };
+    ws?.send(JSON.stringify(msg));
+  }
+
+  function redoOnClick() {
+    if (!canvas.current || !context) return;
+    redo(canvas.current, context, history);
+    const msg = { MsgType: "history_redo", Content: null };
+    ws?.send(JSON.stringify(msg));
+  }
+
   useEffect(() => {
     if (!canvas.current || !(canvas.current instanceof HTMLCanvasElement))
       return;
@@ -163,13 +204,10 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
   }, [context]);
 
   useEffect(() => {
-    //console.log(incomingHistoryChange);
     if (!incomingHistoryChange || !canvas.current || !context) return;
-    //console.log(history);
     if (incomingHistoryChange.MsgType === "history_redo") {
       redo(canvas.current, context, history);
     } else if (incomingHistoryChange.MsgType === "history_undo") {
-      //console.log('once')
       undo(canvas.current, context, history);
     }
     setIncomingHistoryChange(undefined);
@@ -205,14 +243,17 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
       }
       switch (incoming.MsgType) {
         case "drawing": {
-          console.log(incoming, typeof incoming.Content)
-          const newDrawData = Object.assign(new DrawData([]), incoming.Content)
+          console.log(incoming, typeof incoming.Content);
+          const newDrawData = Object.assign(new DrawData([]), incoming.Content);
           setIncomingDrawingData([...incomingDrawingData, newDrawData]);
           break;
         }
         case "history": {
           if (incoming.Content instanceof DrawData) return;
-          const newHistory = new History(incoming.Content.Actions, incoming.Content.RedoArr);
+          const newHistory = new History(
+            incoming.Content.Actions,
+            incoming.Content.RedoArr
+          );
           setHistory(newHistory);
           break;
         }
@@ -247,36 +288,36 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
             width={width}
             height={height}
             onMouseMove={(e) => {
-              if (
-                !context ||
-                !isPressed ||
-                !(e.target instanceof HTMLCanvasElement)
-              )
-                return;
-              const rect = e.target.getBoundingClientRect();
-              const x = e.clientX - rect.x;
-              const y = e.clientY - rect.y;
-              context.beginPath();
-              if (!prevPos) {
-                setDrawBuffer(new DrawData([], lineWidth, ColorFromHex(color)));
-                context;
-              } else {
-                drawLine(
-                  { x: x, y: y },
-                  prevPos,
-                  context,
-                  lineWidth,
-                  ColorFromHex(color)
-                );
-                drawBuffer.addAction("line", prevPos, { x: x, y: y });
+              if (!context || !isPressed) return;
+              const coordinates = getCanvasCoordinates(e);
+              if (!coordinates) return;
+              if (drawMode === 0) {
+                context.beginPath();
+                if (!prevPos) {
+                  setDrawBuffer(
+                    new DrawData([], lineWidth, ColorFromHex(color))
+                  );
+                  context;
+                } else {
+                  drawLine(
+                    coordinates,
+                    prevPos,
+                    context,
+                    lineWidth,
+                    ColorFromHex(color)
+                  );
+                  drawBuffer.addAction("line", prevPos, coordinates);
+                }
               }
-              setPrevPos({ x: x, y: y });
+              if (drawMode === 1 && prevPos == undefined) {
+                setDrawingStart(coordinates);
+              }
+              setPrevPos(coordinates);
             }}
             onMouseLeave={() => {
               setIsPressed(false);
               setPrevPos(null);
               if (!drawBuffer.isEmpty()) {
-                console.log(drawBuffer);
                 drawBuffer.send(sender);
               }
               setDrawBuffer(new DrawData([]));
@@ -284,76 +325,42 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
             onMouseDown={() => {
               setIsPressed(true);
             }}
-            onMouseUp={() => {
+            onMouseUp={(e) => {
+              if (drawMode === 1 && drawingStart && context) {
+                const coordinates = getCanvasCoordinates(e);
+                if (coordinates) {
+                  drawLine(
+                    coordinates,
+                    drawingStart,
+                    context,
+                    lineWidth,
+                    ColorFromHex(color)
+                  );
+                }
+                sender(
+                  new DrawData([
+                    { type: "line", start: coordinates, end: drawingStart },
+                  ], lineWidth, ColorFromHex(color))
+                );
+                setDrawingStart(undefined);
+              }
+
+              if (drawMode === 0) {
+                drawBuffer.send(sender);
+                setDrawBuffer(new DrawData([]));
+              }
               setIsPressed(false);
               setPrevPos(null);
-              drawBuffer.send(sender);
-              setDrawBuffer(new DrawData([]));
             }}
           ></canvas>
         </div>
-        <div className="px-2 m-1 border-l border-l-neutral-200">
-          <ul>
-            <li>
-              <label className="block" htmlFor="color">
-                Color
-              </label>
-              <input
-                className="bg-neutral-100"
-                placeholder="#000000"
-                onChange={(e) => {
-                  if (
-                    e.target.value.length < 7 ||
-                    !e.target.value.startsWith("#")
-                  )
-                    return;
-                  setColor(e.target.value);
-                }}
-                name="color"
-                type="color"
-              />
-            </li>
-            <li>
-              <label htmlFor="line-width" className="block">
-                Line width
-              </label>
-              <input
-                name="line-width"
-                onChange={(e) => {
-                  const w = Number(e.target.value);
-                  if (Number.isNaN(w) || !context) return;
-                  setLineWidth(w);
-                }}
-                type="text"
-                className="bg-neutral-100"
-              />
-            </li>
-            <li className="flex justify-between">
-              <button
-                onClick={() => {
-                  if (!canvas.current || !context) return;
-                  undo(canvas.current, context, history);
-                  const msg = { MsgType: "history_undo", Content: null };
-                  ws?.send(JSON.stringify(msg));
-                  console.log("once");
-                }}
-              >
-                {"Undo <-"}
-              </button>
-              <button
-                onClick={() => {
-                  console.log("once");
-                  if (!canvas.current || !context) return;
-                  redo(canvas.current, context, history);
-                  const msg = { MsgType: "history_redo", Content: null };
-                  ws?.send(JSON.stringify(msg));
-                }}
-              >
-                {"Redo ->"}
-              </button>
-            </li>
-          </ul>
-        </div>
+        <CanvasControl
+          colorSetter={colorSetter}
+          lineWidthSetter={lineWidthSetter}
+          drawModeSetter={drawModeSetter}
+          undo={undoOnClick}
+          redo={redoOnClick}
+        />
       </div>
       <div className="flex m-2">
         <Button
