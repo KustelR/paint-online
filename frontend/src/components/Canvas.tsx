@@ -54,7 +54,8 @@ function drawLine(
   prevPos: Position,
   context: CanvasRenderingContext2D,
   width?: number,
-  color?: Color
+  color?: Color,
+  pencil?: boolean
 ) {
   if (color) {
     context.strokeStyle = color.toHexString();
@@ -66,6 +67,50 @@ function drawLine(
   context.moveTo(prevPos.x, prevPos.y);
   context.lineTo(pos.x, pos.y);
   context.stroke();
+  if (pencil && width && width > 1) {
+    drawDot(pos, context, width, color);
+  }
+}
+
+function drawCircle(
+  pos: Position,
+  context: CanvasRenderingContext2D,
+  radius: number,
+  width?: number,
+  color?: Color,
+  fill?: boolean
+) {
+  let oldColor = context.fillStyle;
+  if (color) {
+    context.fillStyle = color.toHexString();
+  }
+  let oldLineWidth;
+  if (width) {
+    oldLineWidth = context.lineWidth;
+    context.lineWidth = width;
+  }
+  context.beginPath();
+  context.arc(pos.x, pos.y, radius, 0, 180);
+  context.stroke();
+  if (fill) {
+    context.fill();
+  }
+  if (oldLineWidth) {
+    context.lineWidth = oldLineWidth;
+  }
+  if (oldColor) {
+    context.fillStyle = oldColor;
+  }
+}
+
+function drawDot(
+  pos: Position,
+  context: CanvasRenderingContext2D,
+  width: number,
+  color?: Color
+) {
+  const dotR = Math.max(width / 2 - 1, 0.5);
+  drawCircle(pos, context, dotR, 1, color, true);
 }
 
 function handleDrawData(
@@ -78,10 +123,34 @@ function handleDrawData(
     oldLineWidth = context.lineWidth;
     context.lineWidth = data.lineWidth;
   }
+  let colorData = data.color
+    ? Object.assign(new RGBAColor(0, 0, 0, 0), data.color)
+    : new RGBAColor(0, 0, 0, 255);
   const actionsLen = data.actions.length;
   for (let j = 0; j < actionsLen; j++) {
     const action = data.actions[j];
     switch (action.type) {
+      case "dot": {
+        if (!action.start || !data.lineWidth) continue;
+        drawDot(action.start, context, data.lineWidth, colorData);
+        break;
+      }
+      case "circle": {
+      }
+      case "pencil": {
+        if (!action || !action.start || !action.end) return;
+        drawLine(
+          action.end,
+          action.start,
+          context,
+          data.lineWidth,
+          colorData
+            ? Object.assign(new RGBAColor(0, 0, 0, 0), colorData)
+            : new RGBAColor(0, 0, 0, 255),
+          true
+        );
+        break;
+      }
       case "line":
         {
           if (!action || !action.start || !action.end) return;
@@ -219,7 +288,6 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
     history.remind().forEach((data) => {
       handleDrawData(data, context, canvas.current!);
     });
-    console.log(history);
   }, [history]);
 
   useEffect(() => {
@@ -243,7 +311,6 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
       }
       switch (incoming.MsgType) {
         case "drawing": {
-          console.log(incoming, typeof incoming.Content);
           const newDrawData = Object.assign(new DrawData([]), incoming.Content);
           setIncomingDrawingData([...incomingDrawingData, newDrawData]);
           break;
@@ -304,9 +371,10 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                     prevPos,
                     context,
                     lineWidth,
-                    ColorFromHex(color)
+                    ColorFromHex(color),
+                    true
                   );
-                  drawBuffer.addAction("line", prevPos, coordinates);
+                  drawBuffer.addAction("pencil", prevPos, coordinates);
                 }
               }
               if (drawMode === 1 && prevPos == undefined) {
@@ -322,8 +390,18 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
               }
               setDrawBuffer(new DrawData([]));
             }}
-            onMouseDown={() => {
+            onMouseDown={(e) => {
               setIsPressed(true);
+              if (drawMode === 0) {
+                const coordinates = getCanvasCoordinates(e);
+                if (!coordinates || !context || !canvas.current) return;
+                drawDot(coordinates, context, lineWidth, ColorFromHex(color));
+                setPrevPos(coordinates);
+                const drawData = new DrawData([
+                  { type: "dot", start: coordinates },
+                ]);
+                drawData.send(sender);
+              }
             }}
             onMouseUp={(e) => {
               if (drawMode === 1 && drawingStart && context) {
@@ -338,15 +416,20 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                   );
                 }
                 sender(
-                  new DrawData([
-                    { type: "line", start: coordinates, end: drawingStart },
-                  ], lineWidth, ColorFromHex(color))
+                  new DrawData(
+                    [{ type: "line", start: coordinates, end: drawingStart }],
+                    lineWidth,
+                    ColorFromHex(color)
+                  )
                 );
                 setDrawingStart(undefined);
               }
 
               if (drawMode === 0) {
-                drawBuffer.send(sender);
+                const drawData = drawBuffer;
+                drawData.lineWidth = lineWidth;
+                drawData.color = ColorFromHex(color);
+                drawData.send(sender);
                 setDrawBuffer(new DrawData([]));
               }
               setIsPressed(false);
