@@ -4,24 +4,27 @@ type Props = {
   colorSetter: (color: string) => void;
   lineWidthSetter: (width: number) => void;
   drawModeSetter: (mode: number) => void;
+  fillToggler: () => void; 
   undo: () => void;
   redo: () => void;
 };
 
 const PencilDrawMode = 0;
 const LineDrawMode = 1;
+const CircleDrawMode = 2;
 
 export default function CanvasControl({
   colorSetter,
   lineWidthSetter,
   drawModeSetter,
+  fillToggler,
   undo,
   redo,
 }: Props) {
   return (
     <div className="px-2 m-1 border-l border-l-neutral-200">
       <ul>
-        <li className="mb-4">
+        <li className="mb-4 border-b border-neutral-200">
           <h3 className="font-bold">Draw mode</h3>
           <ul>
             <li>
@@ -33,6 +36,9 @@ export default function CanvasControl({
               <button onClick={() => drawModeSetter(LineDrawMode)}>
                 Line
               </button>
+            </li>
+            <li>
+              <button onClick={() => drawModeSetter(CircleDrawMode)}>Circle</button>
             </li>
           </ul>
         </li>
@@ -71,6 +77,10 @@ export default function CanvasControl({
           <button onClick={redo}>{"Redo ->"}</button>
         </li>
       </ul>
+      <div>
+        <h3 className="font-bold">Settings</h3>
+        <label><input onChange={fillToggler} type="checkbox" />Fill</label>
+      </div>
     </div>
   );
 }

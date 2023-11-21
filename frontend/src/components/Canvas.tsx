@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { DrawData, History } from "@/scripts/drawSerializer";
 import Button from "./ui/Button";
 import type { Position, Color } from "@/scripts/drawing";
-import { ColorFromHex, RGBAColor } from "@/scripts/drawing";
+import { ColorFromHex, RGBAColor, distance } from "@/scripts/drawing";
 import CanvasControl from "./CanvasControl";
 
 type IncomingMsg = {
@@ -136,6 +136,17 @@ function handleDrawData(
         break;
       }
       case "circle": {
+        if (action.start && context && action.end) {
+          drawCircle(
+            action.start,
+            context,
+            distance(action.start, action.end),
+            data.lineWidth,
+            colorData,
+            action.additionalData ? action.additionalData.fill : false
+          );
+          break;
+        }
       }
       case "pencil": {
         if (!action || !action.start || !action.end) return;
@@ -229,6 +240,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
     IncomingMsg | undefined
   >();
   const [drawMode, setDrawMode] = useState<number>(0);
+  const [fillMode, setFillMode] = useState<boolean>(false);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   function sender(data: DrawData) {
@@ -377,7 +389,7 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
                   drawBuffer.addAction("pencil", prevPos, coordinates);
                 }
               }
-              if (drawMode === 1 && prevPos == undefined) {
+              if ((drawMode === 1 || drawMode === 2) && prevPos == undefined) {
                 setDrawingStart(coordinates);
               }
               setPrevPos(coordinates);
@@ -404,33 +416,70 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
               }
             }}
             onMouseUp={(e) => {
-              if (drawMode === 1 && drawingStart && context) {
-                const coordinates = getCanvasCoordinates(e);
-                if (coordinates) {
-                  drawLine(
-                    coordinates,
-                    drawingStart,
-                    context,
-                    lineWidth,
-                    ColorFromHex(color)
-                  );
+              switch (drawMode) {
+                case 0: {
+                  const drawData = drawBuffer;
+                  drawData.lineWidth = lineWidth;
+                  drawData.color = ColorFromHex(color);
+                  drawData.send(sender);
+                  setDrawBuffer(new DrawData([]));
                 }
-                sender(
-                  new DrawData(
-                    [{ type: "line", start: coordinates, end: drawingStart }],
-                    lineWidth,
-                    ColorFromHex(color)
-                  )
-                );
-                setDrawingStart(undefined);
-              }
-
-              if (drawMode === 0) {
-                const drawData = drawBuffer;
-                drawData.lineWidth = lineWidth;
-                drawData.color = ColorFromHex(color);
-                drawData.send(sender);
-                setDrawBuffer(new DrawData([]));
+                case 1: {
+                  if (drawingStart && context) {
+                    const coordinates = getCanvasCoordinates(e);
+                    if (coordinates) {
+                      drawLine(
+                        coordinates,
+                        drawingStart,
+                        context,
+                        lineWidth,
+                        ColorFromHex(color)
+                      );
+                    }
+                    sender(
+                      new DrawData(
+                        [
+                          {
+                            type: "line",
+                            start: coordinates,
+                            end: drawingStart,
+                          },
+                        ],
+                        lineWidth,
+                        ColorFromHex(color)
+                      )
+                    );
+                    setDrawingStart(undefined);
+                  }
+                }
+                case 2: {
+                  const coordinates = getCanvasCoordinates(e);
+                  if (coordinates && context && drawingStart) {
+                    drawCircle(
+                      drawingStart,
+                      context,
+                      distance(drawingStart, coordinates),
+                      lineWidth,
+                      ColorFromHex(color),
+                      fillMode
+                    );
+                    sender(
+                      new DrawData(
+                        [
+                          {
+                            type: "circle",
+                            start: drawingStart,
+                            end: coordinates,
+                            additionalData: { fill: fillMode },
+                          },
+                        ],
+                        lineWidth,
+                        ColorFromHex(color)
+                      )
+                    );
+                  }
+                  setDrawingStart(undefined);
+                }
               }
               setIsPressed(false);
               setPrevPos(null);
@@ -443,6 +492,9 @@ export default function Canvas({ url, id, height, width, getId }: Props) {
           drawModeSetter={drawModeSetter}
           undo={undoOnClick}
           redo={redoOnClick}
+          fillToggler={() => {
+            setFillMode(!fillMode);
+          }}
         />
       </div>
       <div className="flex m-2">
