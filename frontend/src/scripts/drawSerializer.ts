@@ -72,5 +72,6 @@ type action = {
     start?: Position | null
     end?: Position | null
     type: string
+    additionalData?: {[key: string]: any}
 }
 
