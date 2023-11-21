@@ -3,6 +3,12 @@ export type Position = {
   y: number;
 };
 
+export function distance(pos1: Position, pos2: Position): number {
+  const xlen = Math.abs(Math.abs(pos1.x) - Math.abs(pos2.x)); 
+  const ylen = Math.abs(Math.abs(pos1.y) - Math.abs(pos2.y)); 
+  return Math.sqrt(xlen * xlen + ylen * ylen);
+}
+
 export interface Color {
   toRGB(): { r: number; g: number; b: number };
   toRGBA(): { r: number; g: number; b: number; a: number };
