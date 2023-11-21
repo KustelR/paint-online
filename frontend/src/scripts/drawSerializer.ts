@@ -69,8 +69,8 @@ export class History {
 }
 
 type action = {
-    start?: Position
-    end?: Position
+    start?: Position | null
+    end?: Position | null
     type: string
 }
 
